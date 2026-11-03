@@ -13,10 +13,12 @@ RUN NODE_OPTIONS="--max-old-space-size=4096" pnpm build
 # Keep the existing directory layout used by calculate.mjs and its workers.
 RUN pnpm --filter @aginnovationaustralia/emissions-calculators --prod deploy \
       --ignore-scripts /runtime/packages/calculators \
-    && cp calculate.mjs /runtime/calculate.mjs \
+    && cp calculate.mjs server.mjs /runtime/ \
+    && cp -R web /runtime/web \
     && cp LICENSE /runtime/LICENSE \
     && find /runtime/packages/calculators/dist -type f \
-      \( -name '*.cjs' -o -name '*.map' -o -name '*.d.ts' \) -delete
+      \( -name '*.cjs' -o -name '*.map' -o -name '*.d.ts' \) -delete \
+    && chmod -R a+rX /runtime
 
 FROM node:22-bookworm-slim
 
@@ -27,6 +29,8 @@ ENV NODE_ENV=production \
 
 # Exclude sources, tests, examples, build tools, caches and development packages.
 COPY --from=build /runtime/ /app/
+
+EXPOSE 8080
 
 USER node
 
