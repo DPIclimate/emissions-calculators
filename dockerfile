@@ -8,13 +8,16 @@ COPY . .
 
 RUN pnpm install --frozen-lockfile
 RUN NODE_OPTIONS="--max-old-space-size=4096" pnpm build
+RUN pnpm run build:web
 
 # Export a self-contained package with production dependencies only.
 # Keep the existing directory layout used by calculate.mjs and its workers.
 RUN pnpm --filter @aginnovationaustralia/emissions-calculators --prod deploy \
       --ignore-scripts /runtime/packages/calculators \
     && cp calculate.mjs server.mjs /runtime/ \
-    && cp -R web /runtime/web \
+    && mkdir -p /runtime/web \
+    && cp web/client.js web/style.css /runtime/web/ \
+    && cp -R web/vendor /runtime/web/vendor \
     && cp LICENSE /runtime/LICENSE \
     && find /runtime/packages/calculators/dist -type f \
       \( -name '*.cjs' -o -name '*.map' -o -name '*.d.ts' \) -delete \
