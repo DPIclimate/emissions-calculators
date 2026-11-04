@@ -1,5 +1,6 @@
 // @ts-check
 
+import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
 import { readFileSync, readdirSync } from 'node:fs';
 import { isMainThread, parentPort, Worker, workerData } from 'node:worker_threads';
@@ -24,27 +25,24 @@ function page(calculator = 'cotton', input = '', output = '', message = '') {
   const alert = !message ? 'info' : message === 'Calculation complete.' ? 'success' : 'error';
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>EAP calculator</title><link rel="stylesheet" href="/vendor/fonts.css"><link rel="stylesheet" href="/vendor/nsw.css"><link rel="stylesheet" href="/style.css"><script src="/client.js" defer></script></head>
+<title>EAP calculator</title><meta name="editor-style-nonce" content="EDITOR_STYLE_NONCE"><link rel="stylesheet" href="/vendor/fonts.css"><link rel="stylesheet" href="/vendor/nsw.css"><link rel="stylesheet" href="/style.css"><script src="/client.js" type="module"></script></head>
 <body><nav class="nsw-skip" aria-label="Skip links"><a href="#main-content">Skip to content</a></nav>
 <header class="nsw-header nsw-header--simple"><p class="nsw-container calculator-brand">Environmental Accounting Platform</p></header>
 <main id="main-content" class="nsw-container calculator-main"><h1>Emissions calculator</h1>
 <p class="nsw-intro">Choose a calculator, supply its JSON input, and submit to see the result.</p>
 <section class="calculator-grid" aria-label="Calculator workspace">
-<form class="nsw-form" method="post" action="/calculate">
-<label class="nsw-form__label" for="calculator">Calculator</label><select class="nsw-form__select" id="calculator" name="calculator">${options}</select>
-<fieldset id="drop-zone"><legend class="nsw-form__legend">Input JSON</legend>
-<label class="nsw-form__label" for="file">Drop a JSON file here or choose a file</label>
-<input id="file" type="file" accept=".json,application/json" aria-describedby="file-help">
-<p id="file-help" class="nsw-form__helper">A selected file replaces the input below. Files are processed locally by this server.</p>
+<form class="nsw-form" method="post" action="/calculate" aria-labelledby="inputs-heading"><h2 id="inputs-heading">Inputs</h2>
+<p class="calculator-selector-row">
+<label class="nsw-form__label" for="calculator">Calculator</label><select class="nsw-form__select" id="calculator" name="calculator">${options}</select><button class="nsw-button nsw-button--dark" type="submit">Calculate emissions</button></p>
+<section id="drop-zone" aria-labelledby="input-label"><header class="calculator-input-tools"><label class="nsw-form__label" id="input-label" for="input">Drop a JSON file or paste JSON into the editor.</label></header>
 <p id="file-status" class="nsw-form__helper" role="status"></p>
-<label class="nsw-form__label" for="input">Or paste JSON</label>
-<textarea class="nsw-form__input" id="input" name="input" rows="22" required spellcheck="false" placeholder="Paste calculator input here">${escapeHtml(input)}</textarea>
-</fieldset><button class="nsw-button nsw-button--dark" type="submit">Calculate emissions</button></form>
+<textarea class="nsw-form__input" id="input" name="input" rows="26" required spellcheck="false" placeholder="Paste calculator input here">${escapeHtml(input)}</textarea>
+</section></form>
 <section aria-labelledby="result-heading"><h2 id="result-heading">Result</h2>
 <p id="result-status" class="nsw-in-page-alert nsw-in-page-alert--${alert}" role="status">${escapeHtml(message || 'Your result will appear here.')}</p>
-<header class="calculator-output-tools"><label class="nsw-form__label" for="output">Output JSON</label><button id="copy-output" class="nsw-button nsw-button--dark-outline" type="button"${output ? '' : ' disabled'}>Copy output</button></header><p id="copy-status" class="nsw-form__helper" role="status"></p><textarea class="nsw-form__input" id="output" rows="28" readonly spellcheck="false">${escapeHtml(output)}</textarea></section>
+<header class="calculator-output-tools"><label class="nsw-form__label" id="output-label" for="output">Output JSON</label><button id="copy-output" class="nsw-button nsw-button--dark-outline" type="button"${output ? '' : ' disabled'}>Copy output</button><button id="save-output" class="nsw-button nsw-button--dark-outline" type="button"${output ? '' : ' disabled'}>Save as</button></header><p id="copy-status" class="nsw-form__helper" role="status"></p><textarea class="nsw-form__input" id="output" data-filename="${escapeHtml(calculator)}-result.json" rows="26" readonly spellcheck="false">${escapeHtml(output)}</textarea></section>
 </section></main>
-<footer class="nsw-footer"><p class="nsw-container calculator-attribution">This product incorporates the EAP Calculator Engine open-source code developed and maintained by Agricultural Innovation Australia Ltd. Free access to AIA’s open-source code is supported by the Australian Government through funding from the Improving Consistency of On-Farm Emissions Estimates Program.</p></footer>
+<footer class="nsw-footer"><p class="nsw-container calculator-attribution">This product incorporates the EAP Calculator Engine open-source code developed and maintained by Agricultural Innovation Australia Ltd. Free access to AIA’s open-source code is supported by the Australian Government through funding from the Improving Consistency of On-Farm Emissions Estimates Program. <a href="https://github.com/aginnovationaustralia/emissions-calculators">Original emissions-calculators repository</a></p></footer>
 </body></html>`;
 }
 
@@ -82,7 +80,7 @@ function main() {
   }
   const assets = new Map([
     ['/style.css', { type: 'text/css; charset=utf-8', body: readFileSync(new URL('./web/style.css', import.meta.url)) }],
-    ['/client.js', { type: 'text/javascript; charset=utf-8', body: readFileSync(new URL('./web/client.js', import.meta.url)) }],
+    ['/client.js', { type: 'text/javascript; charset=utf-8', body: readFileSync(new URL('./web/vendor/client.js', import.meta.url)) }],
   ]);
   const vendor = new URL('./web/vendor/', import.meta.url);
   // Serve a fixed asset allowlist; no request path is used to read the filesystem.
@@ -97,13 +95,14 @@ function main() {
   }
   let active = 0;
   const server = createServer(async (request, response) => {
-    response.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self' data:; script-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
+    const styleNonce = randomBytes(16).toString('base64');
+    response.setHeader('Content-Security-Policy', `default-src 'none'; style-src 'self' 'nonce-${styleNonce}'; font-src 'self'; img-src 'self' data:; script-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`);
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Cache-Control', 'no-store');
     /** Send a complete HTML page. @param {number} status @param {string} html */
     function send(status, html) {
       response.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8' });
-      response.end(html);
+      response.end(html.replace('EDITOR_STYLE_NONCE', styleNonce));
     }
     if (request.method === 'GET' && request.url === '/') {
       send(200, page());

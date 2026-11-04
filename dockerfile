@@ -1,3 +1,7 @@
+# docker build -m 8G --tag eap-calculators:4.0.2 .
+# OR
+# container build -m 8G --tag eap-calculators:4.0.2 .
+
 FROM node:22-bookworm AS build
 
 WORKDIR /app
@@ -16,7 +20,7 @@ RUN pnpm --filter @aginnovationaustralia/emissions-calculators --prod deploy \
       --ignore-scripts /runtime/packages/calculators \
     && cp calculate.mjs server.mjs /runtime/ \
     && mkdir -p /runtime/web \
-    && cp web/client.js web/style.css /runtime/web/ \
+    && cp web/style.css /runtime/web/ \
     && cp -R web/vendor /runtime/web/vendor \
     && cp LICENSE /runtime/LICENSE \
     && find /runtime/packages/calculators/dist -type f \

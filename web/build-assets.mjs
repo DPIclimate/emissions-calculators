@@ -1,5 +1,6 @@
 // @ts-check
 
+import { build } from 'esbuild';
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
 // Copy only browser assets into the runtime; npm packages stay in the build stage.
@@ -21,3 +22,14 @@ for (const variant of ['400-normal', '700-normal', '400-italic']) {
   }
 }
 writeFileSync(new URL('fonts.css', vendor), css);
+
+// Bundle editor modules locally; no browser requests to an npm CDN are needed.
+await build({
+  entryPoints: [new URL('./client.js', import.meta.url).pathname],
+  outfile: new URL('client.js', vendor).pathname,
+  bundle: true,
+  format: 'esm',
+  target: ['es2022'],
+  minify: true,
+  legalComments: 'eof',
+});
